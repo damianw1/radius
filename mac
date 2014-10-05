@@ -1,0 +1,116 @@
+<?php 
+
+/**
+ * 
+ */
+class mac {
+    
+	private $db;
+	
+	function __construct() {
+		$this->db = new DataBase();
+	}
+    
+    function checkMac($mac, $hostname_a, $update){
+        $inf = "";
+        if(!empty($mac)){
+            $mac = $this->db->validate($mac);
+            $query_mac = $this->db->query("SELECT * FROM tablica_mac where mac_address = '$mac'");
+            $query_hostname = $this->db->query("SELECT * FROM tablica_mac where hostname = '$hostname_a'");
+            
+            if($update != 1){
+               if(mysql_num_rows($query_mac)>=1){
+                  $inf .="Taki mac już istnieje w bazie! <br />";
+                } 
+               if($update != ""){
+                   if(mysql_num_rows($query_hostname)>=1){
+                     $inf .="Taka nazwa już istnieje w bazie! <br />";
+                    }
+               }
+               
+            }
+            $length_mac = strlen($mac);
+            if ($length_mac!==17) {
+                $inf .= "Adres Mac posiada niedozwoloną ilość znaków!<br />";
+            }
+            if (!preg_match('/^[0-9ABCDEFabcde-]+$/', $mac)){
+                $inf .= "Adres Mac zawiera niedozwolone znaki!<br />";
+            }
+            if($mac[2] !== "-" || $mac[5] !== "-" || $mac[8] !== "-" || $mac[11] !== "-" || $mac[14] !== "-"){
+                $inf .= "Bajty muszą być oddzielone znakiem -<br />";                   
+            }
+            
+        }else{
+            $inf = "Mac nie może być pusty! <br />";
+        }
+        return $inf;
+    }
+    
+    function addMac($mac, $hostname, $department, $vlan){
+        $mac = strtoupper($mac);
+        $hostname = strtoupper($hostname);
+        $hostname = $this->db->validate($hostname);
+        $vlan = $this->db->validate($vlan);
+        $check = $this->checkMac($mac, $hostname, "");
+        if(empty($hostname)){
+            $check .= "Nazwa komputera nie może być pusta <br />";
+        }
+        if (!preg_match('/^[0-9]+$/', $vlan)){
+            $check .= "VLAN musi być liczbą!<br />";
+        }
+        if($check==""){
+            //tabela tabela_mac
+            $id_user = $this->db->getIdUser();
+            $query = "INSERT INTO tablica_mac (mac_address, login_id, hostname, department_id, VLAN) VALUES ('$mac', $id_user, '$hostname', $department, $vlan)";
+            $this->db->query($query);
+            //tabela radcheck
+            $mac_rad = str_replace("-", "", $mac);
+            $mac_rad = strtolower($mac_rad);
+            $query_rad = "INSERT INTO radcheck (username, attribute, op, value) VALUES ('$mac_rad', 'Cleartext-Password', ':=', '$mac_rad')";
+            $this->db->query($query_rad);
+            $check = 1;
+            return $check;
+        }else{
+            return $check;
+        } 
+    }
+
+    function getMacToEdit($id=""){
+        $id = $this->db->validate($id);
+        $query = "SELECT * FROM tablica_mac where id = $id";
+        $result = $this->db->query($query);
+        $result = mysql_fetch_object($result);
+        return $result;        
+    }
+    
+    function editMac($mac, $vlan, $department, $id){
+        $mac = strtoupper($mac);
+        $check = $this->checkMac($mac, "",1);
+        $vlan = $this->db->validate($vlan);
+        
+        if (!preg_match('/^[0-9A]+$/', $vlan)){
+                    $check .= "VLAN musi być liczbą!<br />";
+                }
+        if($check==""){
+            //tabela tabela_mac
+            $id_user = $this->db->getIdUser();
+            $mac_edit_rad = $this->getMacToEdit($id);
+            $query = "UPDATE tablica_mac SET mac_address = '$mac', department_id = $department, VLAN = $vlan, login_id = $id_user where id = $id";
+            $this->db->query($query);
+            //tabela radcheck
+            $mac_rad_edit_old = str_replace("-", "", $mac_edit_rad->mac_address);
+            $mac_rad_edit_old = strtolower($mac_rad_edit_old);
+            $mac_rad_edit_new = str_replace("-", "", $mac);
+            $mac_rad_edit_new = strtolower($mac_rad_edit_new);
+            $query_rad_edit = "UPDATE radcheck SET username = '$mac_rad_edit_new', value = '$mac_rad_edit_new' where username = '$mac_rad_edit_old'";
+            $this->db->query($query_rad_edit);
+            $check = 1;
+            return $check;
+        }else{
+            return $check;
+        } 
+    } 
+}
+
+
+?>
